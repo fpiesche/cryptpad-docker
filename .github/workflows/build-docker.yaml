@@ -39,7 +39,7 @@ jobs:
         id: build-release
         run: |
           # Check whether there already is a Docker image for the current tag
-          SERVER_TAGS=$(curl -s https://registry.hub.docker.com/v1/repositories/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}${{ matrix.IMAGE_TYPE }}/tags | jq -r ".[].name") || SERVER_TAGS="none"
+          SERVER_TAGS=$(curl -s https://registry.hub.docker.com/v2/repositories/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}${{ matrix.IMAGE_TYPE }}/tags | jq -r ".results[].name") || SERVER_TAGS="none"
           for tag in ${SERVER_TAGS[@]}; do
             if [[ "$tag" == "${{ steps.cryptpad-version.outputs.CRYPTPAD_VERSION }}" ]]; then
               echo "Release ${tag} has already been built."
@@ -49,6 +49,7 @@ jobs:
           done
 
       - name: Set Docker metadata
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
         id: meta
         uses: docker/metadata-action@v3
         with:
