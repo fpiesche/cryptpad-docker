@@ -45,7 +45,6 @@ jobs:
 
       - name: Get latest cryptpad version number
         id: cryptpad-version
-        outputs: CRYPTPAD_VERSION
         run: echo "CRYPTPAD_VERSION=$(npm view cryptpad version | head -1)" >> $GITHUB_OUTPUT
 
       - name: Set Docker metadata
