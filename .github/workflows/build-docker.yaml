@@ -3,11 +3,10 @@ name: Build Docker images
 on:
   # Allow manual runs.
   workflow_dispatch:
-    inputs:
-      PUSH_IMAGE:
-        description: Push image to registry
-        type: boolean
-        default: true
+  # Also run on pushes to `main`
+  push:
+    branches:
+      - main
 
 env:
   PLATFORMS: linux/arm/v7,linux/arm64/v8,linux/amd64
@@ -26,28 +25,28 @@ jobs:
         with:
           submodules: true
 
-      - name: Docker Setup QEMU
-        uses: docker/setup-qemu-action@v2
-
-      - name: Docker Setup Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v2 
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2 
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GHCR_TOKEN }}
-
-      - name: Get latest cryptpad version number
+      - name: Get latest Cryptpad tag
         id: cryptpad-version
-        run: echo "CRYPTPAD_VERSION=$(npm view cryptpad version | head -1)" >> $GITHUB_OUTPUT
+        run: |
+          cd cryptpad
+          git fetch --tags
+          LATEST_TAG_REV=$(git rev-list --tags --max-count 1)
+          CRYPTPAD_VERSION=$(git describe --tags ${LATEST_TAG_REV})
+          echo "CRYPTPAD_VERSION=${CRYPTPAD_VERSION}" >> $GITHUB_OUTPUT
+          git checkout ${CRYPTPAD_VERSION}
+
+      - name: Check whether v${{ steps.cryptpad-version.outputs.CRYPTPAD_VERSION }} needs building
+        id: build-release
+        run: |
+          # Check whether there already is a Docker image for the current tag
+          SERVER_TAGS=$(curl -s https://registry.hub.docker.com/v1/repositories/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}${{ matrix.IMAGE_TYPE }}/tags | jq -r ".[].name") || SERVER_TAGS="none"
+          for tag in ${SERVER_TAGS[@]}; do
+            if [[ "$tag" == "${{ steps.cryptpad-version.outputs.CRYPTPAD_VERSION }}" ]]; then
+              echo "Release ${tag} has already been built."
+              echo "BUILD_RELEASE=false" >> $GITHUB_OUTPUT
+              exit
+            fi
+          done
 
       - name: Set Docker metadata
         id: meta
@@ -60,7 +59,31 @@ jobs:
             type=raw,v${{ steps.cryptpad-version.outputs.CRYPTPAD_VERSION }}${{ matrix.IMAGE_TYPE }}
             type=raw,latest${{ matrix.IMAGE_TYPE }}
 
+      - name: Docker Setup QEMU
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
+        uses: docker/setup-qemu-action@v2
+
+      - name: Docker Setup Buildx
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to DockerHub
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
+        uses: docker/login-action@v2 
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
       - name: Build and push ${{ env.IMAGE_NAME }}${{ matrix.IMAGE_TYPE }} image
+        if: ${{ steps.build-release.outputs.BUILD_RELEASE == 'true' }}
         uses: docker/build-push-action@v4
         with:
           file: Dockerfile${{ matrix.IMAGE_TYPE }}
