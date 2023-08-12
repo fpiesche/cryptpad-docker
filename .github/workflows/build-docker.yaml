@@ -58,7 +58,7 @@ jobs:
             type=raw,v${{ steps.cryptpad-version.outputs.CRYPTPAD_VERSION }}${{ matrix.IMAGE_TYPE }}
             type=raw,latest${{ matrix.IMAGE_TYPE }}
 
-      - name: Build and push ${{ env.IMAGE_NAME }}-${{ matrix.IMAGE_TYPE }} image
+      - name: Build and push ${{ env.IMAGE_NAME }}${{ matrix.IMAGE_TYPE }} image
         uses: docker/build-push-action@v4
         with:
           file: Dockerfile${{ matrix.IMAGE_TYPE }}
