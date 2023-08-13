@@ -91,5 +91,5 @@ jobs:
           file: Dockerfile${{ matrix.IMAGE_TYPE }}
           platforms: ${{ env.PLATFORMS }}
           tags: ${{ steps.meta.outputs.tags }}
-          push: ${{ inputs.PUSH_IMAGE }}
+          push: true
           labels: ${{ steps.meta.outputs.labels }}
